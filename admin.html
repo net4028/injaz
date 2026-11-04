@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>إدارة ملف الإنجاز</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -209,7 +209,7 @@
       var isImg = f.type.indexOf('image/') === 0;
       var st = it.status === 'ok' ? '<span class="st ok">تم</span>' : it.status === 'err' ? '<span class="st err">تعذّر</span>' : it.status ? '<span class="st">' + esc(it.status) + '</span>' :
         '<button type="button" class="lb-icon" style="background:transparent;color:var(--danger)" data-rm="' + i + '" aria-label="إزالة ' + esc(f.name) + '">' + ICONS.close + '</button>';
-      return '<div class="file-row"><span class="mini-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--teal)">' + (isImg ? ICONS.img : ICONS.pdf) + '</span>' +
+      return '<div class="file-row"><span class="mini-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--primary)">' + (isImg ? ICONS.img : ICONS.pdf) + '</span>' +
         '<span class="nm"><b>' + esc(f.name) + '</b><span>' + sizeText(f.size) + '</span></span>' + st + '</div>';
     }).join('');
   }
@@ -358,7 +358,7 @@
     a = a || { id: '', text: '', date: isoToday(), sem: '', valueType: '', valueDesc: '', order: el.actions.length + 1 };
     var sem = a.sem || semFromDate(a.date);
     var box = document.getElementById('aForm');
-    box.innerHTML = '<div class="list-item" style="border-color:var(--teal)">' +
+    box.innerHTML = '<div class="list-item" style="border-color:var(--primary)">' +
       '<div class="field"><label for="aText">' + (isGoal ? 'الإجراء' : 'الموقف') + '</label><textarea class="input" id="aText" placeholder="' + (isGoal ? 'مثال: أعددتُ سجل الغياب والاستئذان إلكترونياً' : 'الموقف ← ما قمتُ به ← النتيجة') + '">' + esc(a.text) + '</textarea></div>' +
       '<div class="row2"><div class="field"><label for="aDate">التاريخ</label><input class="input" type="date" id="aDate" value="' + esc(a.date) + '"></div>' +
       inp('aOrder', 'الترتيب', a.order, '1') + '</div>' +
