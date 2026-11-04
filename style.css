@@ -41,11 +41,8 @@ h1, h2, h3, p { margin: 0; }
 
 /* الغلاف */
 .cover {
-  background: var(--primary); color: #fff; padding: 44px 0 84px; position: relative;
-  border-bottom: 1px solid var(--accent);
-}
-.cover::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 6px; height: 1px; background: rgba(201, 154, 134, .55);
+  background: var(--primary); color: #fff; padding: 40px 0 44px;
+  border-bottom: 4px double var(--accent);
 }
 .cover .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
 .avatar {
@@ -59,8 +56,10 @@ h1, h2, h3, p { margin: 0; }
 .who .cycle { color: var(--accent); font-weight: 500; font-size: 15px; letter-spacing: 0; }
 .who h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 44px); line-height: 1.3; }
 .who .role { color: #E7D6DF; font-size: 16px; }
+.who .to { color: #E7D6DF; font-size: 14px; margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(201, 154, 134, .35); }
+.who .to b { color: #F3DDD3; font-weight: 600; }
 
-main.wrap { margin-top: -48px; padding-bottom: 56px; display: flex; flex-direction: column; gap: 26px; }
+main.wrap { margin-top: 28px; padding-bottom: 56px; display: flex; flex-direction: column; gap: 26px; }
 
 /* أزرار */
 .btn {
@@ -78,8 +77,12 @@ main.wrap { margin-top: -48px; padding-bottom: 56px; display: flex; flex-directi
 .btn-sm { min-height: 38px; padding: 0 12px; font-size: 14px; }
 
 /* الملخص */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-.stat { background: var(--card); border-radius: 14px; padding: 16px 20px; border-top: 2px solid var(--accent); box-shadow: 0 2px 10px rgba(62, 31, 58, .07); }
+.stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+}
+.stat { padding: 18px 22px; border-inline-start: 1px solid var(--line); }
+.stat:first-child { border-inline-start: none; }
 .stat b { display: block; font-family: var(--display); font-size: 34px; color: var(--primary); line-height: 1.25; }
 .stat span { font-size: 14px; color: var(--muted); }
 
@@ -258,9 +261,23 @@ footer.site { text-align: center; font-size: 13px; color: var(--muted); padding:
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 @media (max-width: 560px) {
-  .cover { padding: 26px 0 70px; }
-  .avatar { width: 64px; height: 64px; font-size: 26px; }
+  .cover { padding: 28px 0 32px; }
+  .stat { padding: 14px 12px; }
+  .stat b { font-size: 26px; }
+  .stat span { font-size: 12.5px; }
+  .avatar { width: 70px; height: 70px; font-size: 34px; }
   .fact { border-left: none; border-top: 1px solid var(--line); }
   .ev-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ev-thumb { height: 120px; }
 }
+
+/* الإعدادات والتثبيت */
+.panel h2 { font-family: var(--display); font-size: 24px; color: var(--primary); }
+.panel .lead { color: var(--muted); font-size: 14px; }
+.linkbox { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; }
+.linkbox code { flex: 1 1 220px; direction: ltr; text-align: left; font-size: 13px; overflow-wrap: anywhere; color: var(--ink); }
+.install-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--accent); border-radius: 14px; padding: 12px 14px; }
+.install-bar p { flex: 1 1 200px; font-size: 14px; }
+.steps { margin: 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 6px; }
+.p-sign { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; break-inside: avoid; }
+.p-sign div { border-top: 1px solid #999; padding-top: 6px; }

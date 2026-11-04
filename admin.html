@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#3E1F3A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ملف إنجازي">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>إدارة ملف الإنجاز</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
@@ -11,7 +18,7 @@
 </head>
 <body>
 <div id="app">
-  <header class="cover" style="padding-bottom:70px">
+  <header class="cover">
     <div class="wrap">
       <div class="who">
         <p class="cycle">إدارة ملف الإنجاز</p>
@@ -36,12 +43,13 @@
     </section>
 
     <div id="admin" class="admin-wrap" hidden>
+      <div id="installBar"></div>
       <nav class="tabs" role="tablist" aria-label="أقسام الإدارة">
         <button type="button" role="tab" data-tab="upload" aria-selected="true">رفع شاهد</button>
         <button type="button" role="tab" data-tab="reports" aria-selected="false">التقارير</button>
         <button type="button" role="tab" data-tab="files" aria-selected="false">الشواهد</button>
         <button type="button" role="tab" data-tab="ready" aria-selected="false">الجاهزية</button>
-        <button type="button" role="tab" data-tab="profile" aria-selected="false">بياناتي</button>
+        <button type="button" role="tab" data-tab="profile" aria-selected="false">الإعدادات</button>
       </nav>
       <div id="tabBody"></div>
     </div>
@@ -78,7 +86,9 @@
     document.getElementById('topBtns').hidden = false;
     var n = (DATA.profile && DATA.profile.name) || '';
     document.getElementById('hello').textContent = n ? 'مرحباً ' + n.split(' ')[0] : 'مرحباً';
-    if (!silent) renderTab();
+    if (!DATA.profile || !DATA.profile.name) { selectTab('profile'); toast('ابدئي بتعبئة بياناتك في الإعدادات'); }
+    else if (!silent) renderTab();
+    drawInstallBar();
   }
 
   async function refresh() {
@@ -113,10 +123,14 @@
   document.querySelector('.tabs').addEventListener('click', function (e) {
     var b = e.target.closest('[data-tab]');
     if (!b) return;
-    TAB = b.dataset.tab;
-    document.querySelectorAll('.tabs [data-tab]').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
-    renderTab();
+    selectTab(b.dataset.tab);
   });
+
+  function selectTab(t) {
+    TAB = t;
+    document.querySelectorAll('.tabs [data-tab]').forEach(function (x) { x.setAttribute('aria-selected', String(x.dataset.tab === t)); });
+    renderTab();
+  }
 
   function renderTab() {
     if (!DATA) return;
@@ -481,26 +495,108 @@
     body.innerHTML = h;
   }
 
-  /* =========== بياناتي =========== */
+  /* =========== الإعدادات =========== */
+  function viewLink() { return new URL('./', location.href).href; }
+
   function tabProfile() {
     var p = DATA.profile || {};
-    body.innerHTML = '<section class="panel">' +
-      inp('pName', 'الاسم كما يظهر في الملف', p.name, '') +
-      '<div class="row2">' + inp('pTitle', 'المسمى الوظيفي', p.title, 'مساعدة إدارية') + inp('pSchool', 'المدرسة', p.school, '') + '</div>' +
-      inp('pYear', 'دورة التقييم', p.year, '2026') +
-      '<button type="button" class="btn btn-primary" id="pSave">حفظ</button></section>';
+    var h = '<section class="panel"><h2>بيانات الملف</h2><p class="lead">تظهر على غلاف ملف الإنجاز وفي النسخة المطبوعة.</p>' +
+      '<div class="row2">' + inp('pName', 'اسم الموظفة', p.name, 'الاسم الثلاثي') + inp('pTitle', 'المسمى الوظيفي', p.title, 'مساعدة إدارية') + '</div>' +
+      '<div class="row2">' + inp('pSchool', 'المدرسة', p.school, '') + inp('pPrincipal', 'اسم قائدة المدرسة (المديرة)', p.principal, 'أ. ') + '</div>' +
+      '<div class="row2">' + inp('pYear', 'دورة التقييم', p.year, '2026') + '</div>' +
+      '<button type="button" class="btn btn-primary" id="pSave">حفظ البيانات</button></section>';
+
+    h += '<section class="panel"><h2>إرسال الملف للمديرة</h2><p class="lead">هذا رابط صفحة العرض. أرسليه للمديرة، ولا ترسلي رابط هذه الصفحة.</p>' +
+      '<div class="linkbox"><code id="vLink">' + esc(viewLink()) + '</code></div>' +
+      '<div class="btn-row"><button type="button" class="btn btn-primary" id="vShare">إرسال الرابط</button><button type="button" class="btn btn-ghost" id="vCopy">نسخ الرابط</button></div></section>';
+
+    h += '<section class="panel"><h2>تثبيت التطبيق على الجوال</h2><div id="installBox"></div></section>';
+
+    h += '<section class="panel"><h2>تغيير كلمة المرور</h2>' +
+      '<div class="row2"><div class="field"><label for="np1">كلمة المرور الجديدة</label><input class="input" type="password" id="np1" autocomplete="new-password"></div>' +
+      '<div class="field"><label for="np2">تأكيد كلمة المرور</label><input class="input" type="password" id="np2" autocomplete="new-password"></div></div>' +
+      '<button type="button" class="btn btn-ghost" id="npSave">تغيير كلمة المرور</button></section>';
+    body.innerHTML = h;
+    drawInstallBox(document.getElementById('installBox'));
+
     document.getElementById('pSave').addEventListener('click', async function () {
+      if (!val('pName')) return toast('اكتبي اسم الموظفة', true);
       this.disabled = true;
       try {
         await apiPost({ action: 'saveSettings', pw: PW, settings: {
-          'الاسم': val('pName'), 'المسمى': val('pTitle'), 'المدرسة': val('pSchool'), 'العام الدراسي': val('pYear')
+          'الاسم': val('pName'), 'المسمى': val('pTitle'), 'المدرسة': val('pSchool'),
+          'اسم المديرة': val('pPrincipal'), 'العام الدراسي': val('pYear')
         } });
-        toast('تم الحفظ');
+        toast('تم حفظ البيانات');
         await refresh();
-        document.getElementById('hello').textContent = val('pName') ? 'مرحباً ' + val('pName').split(' ')[0] : 'مرحباً';
+        document.getElementById('hello').textContent = 'مرحباً ' + DATA.profile.name.split(' ')[0];
       } catch (err) { toast(err.message, true); this.disabled = false; }
     });
+    document.getElementById('vCopy').addEventListener('click', function () {
+      navigator.clipboard.writeText(viewLink()).then(function () { toast('تم نسخ الرابط'); }, function () { toast('انسخي الرابط يدوياً', true); });
+    });
+    document.getElementById('vShare').addEventListener('click', function () {
+      var p = DATA.profile || {};
+      var text = 'السلام عليكم، هذا رابط ملف الإنجاز الوظيفي' + (p.name ? ' – ' + p.name : '');
+      if (navigator.share) navigator.share({ title: 'ملف الإنجاز الوظيفي', text: text, url: viewLink() }).catch(function () {});
+      else window.open('https://wa.me/?text=' + encodeURIComponent(text + '\n' + viewLink()), '_blank');
+    });
+    document.getElementById('npSave').addEventListener('click', async function () {
+      var a = val('np1'), b = val('np2');
+      if (a.length < 4) return toast('كلمة المرور ٤ خانات على الأقل', true);
+      if (a !== b) return toast('كلمتا المرور غير متطابقتين', true);
+      this.disabled = true;
+      try {
+        await apiPost({ action: 'changePassword', pw: PW, newPw: a });
+        PW = a;
+        if (localStorage.getItem(PW_KEY)) localStorage.setItem(PW_KEY, a); else sessionStorage.setItem(PW_KEY, a);
+        toast('تم تغيير كلمة المرور');
+        document.getElementById('np1').value = ''; document.getElementById('np2').value = '';
+      } catch (err) { toast(err.message, true); }
+      this.disabled = false;
+    });
   }
+
+  /* =========== التثبيت كتطبيق =========== */
+  var deferredPrompt = null;
+  var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredPrompt = e; drawInstallBar(); var b = document.getElementById('installBox'); if (b) drawInstallBox(b); });
+  window.addEventListener('appinstalled', function () { deferredPrompt = null; isStandalone = true; drawInstallBar(); toast('تم تثبيت التطبيق'); });
+
+  function drawInstallBox(box) {
+    if (isStandalone) { box.innerHTML = '<p class="lead">التطبيق مثبت على هذا الجهاز ✓</p>'; return; }
+    if (deferredPrompt) {
+      box.innerHTML = '<p class="lead">ضغطة واحدة وتظهر أيقونة «ملف إنجازي» على شاشة الجوال، وتفتح مباشرة بدون متصفح.</p><button type="button" class="btn btn-primary" data-install>تثبيت التطبيق</button>';
+    } else if (isIOS) {
+      box.innerHTML = '<ol class="steps"><li>افتحي هذه الصفحة من متصفح <b>Safari</b>.</li><li>اضغطي زر المشاركة (المربع والسهم للأعلى) أسفل الشاشة.</li><li>اختاري <b>«إضافة إلى الشاشة الرئيسية»</b> ثم <b>«إضافة»</b>.</li></ol>';
+    } else {
+      box.innerHTML = '<ol class="steps"><li>افتحي هذه الصفحة من متصفح <b>Chrome</b>.</li><li>اضغطي القائمة ⋮ أعلى الشاشة.</li><li>اختاري <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b>.</li></ol>';
+    }
+  }
+
+  function drawInstallBar() {
+    var bar = document.getElementById('installBar');
+    if (!bar) return;
+    if (isStandalone || localStorage.getItem('portfolio_install_dismissed')) { bar.innerHTML = ''; return; }
+    bar.innerHTML = '<div class="install-bar"><p><b>ثبّتي «ملف إنجازي» على جوالك</b><br>ليفتح من أيقونة على الشاشة مثل أي تطبيق.</p>' +
+      '<div class="btn-row">' + (deferredPrompt ? '<button type="button" class="btn btn-primary btn-sm" data-install>تثبيت</button>' : '<button type="button" class="btn btn-primary btn-sm" data-howto>الطريقة</button>') +
+      '<button type="button" class="btn btn-ghost btn-sm" data-dismiss>لاحقاً</button></div></div>';
+  }
+
+  document.addEventListener('click', async function (e) {
+    if (e.target.closest('[data-install]') && deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      drawInstallBar();
+    }
+    if (e.target.closest('[data-howto]')) selectTab('profile');
+    if (e.target.closest('[data-dismiss]')) { localStorage.setItem('portfolio_install_dismissed', '1'); drawInstallBar(); }
+  });
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 })();
 </script>
 </body>

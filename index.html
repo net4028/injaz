@@ -17,6 +17,7 @@
         <p class="cycle" id="cycle">ملف الإنجاز الوظيفي</p>
         <h1 id="name">&nbsp;</h1>
         <p class="role" id="role"></p>
+        <p class="to" id="to" hidden></p>
       </div>
       <button type="button" class="btn btn-outline-light" id="printBtn"></button>
     </div>
@@ -90,6 +91,8 @@
     document.getElementById('name').textContent = p.name || 'ملف الإنجاز الوظيفي';
     document.getElementById('role').textContent = [p.title, p.school].filter(Boolean).join(' – ');
     document.getElementById('cycle').textContent = p.year ? 'ملف الإنجاز الوظيفي لدورة التقييم ' + p.year : 'ملف الإنجاز الوظيفي';
+    var to = document.getElementById('to');
+    if (p.principal) { to.hidden = false; to.innerHTML = 'مقدَّم إلى قائدة المدرسة: <b>' + esc(p.principal) + '</b>'; } else to.hidden = true;
     document.getElementById('avatar').textContent = (p.name || 'م').trim().charAt(0);
     document.title = p.name ? 'ملف إنجاز ' + p.name : 'ملف الإنجاز الوظيفي';
     document.getElementById('updated').textContent = DATA.updated ? 'آخر تحديث: ' + dateText(DATA.updated) : '';
@@ -316,7 +319,8 @@
     btn.disabled = true;
     var p = DATA.profile || {};
     var h = '<div class="p-cover"><h1>ملف الإنجاز الوظيفي</h1><p><b>' + esc(p.name) + '</b> – ' + esc([p.title, p.school].filter(Boolean).join(' – ')) + '</p>' +
-      (p.year ? '<p>دورة التقييم ' + esc(p.year) + '</p>' : '') + '</div>';
+      (p.year ? '<p>دورة التقييم ' + esc(p.year) + '</p>' : '') +
+      (p.principal ? '<p>مقدَّم إلى قائدة المدرسة: ' + esc(p.principal) + '</p>' : '') + '</div>';
     DATA.elements.forEach(function (el) {
       var r = el.report || {};
       var isGoal = el.type === 'goal';
@@ -342,6 +346,7 @@
       if (rest.length) h += '<h3>' + (el.actions.length ? 'شواهد أخرى' : 'الشواهد') + '</h3>' + printEv(rest);
       h += '</section>';
     });
+    h += '<div class="p-sign"><div>الموظفة: ' + esc(p.name) + '<br>التوقيع:</div><div>قائدة المدرسة: ' + esc(p.principal || '') + '<br>اطلعت واعتمدت – التوقيع:</div></div>';
     var pd = document.getElementById('print');
     pd.innerHTML = h;
     var imgs = Array.prototype.slice.call(pd.querySelectorAll('img'));
