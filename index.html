@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ملف الإنجاز الوظيفي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="cover">
+    <div class="wrap">
+      <div class="avatar" id="avatar" aria-hidden="true"></div>
+      <div class="who">
+        <p class="cycle" id="cycle">ملف الإنجاز الوظيفي</p>
+        <h1 id="name">&nbsp;</h1>
+        <p class="role" id="role"></p>
+      </div>
+      <button type="button" class="btn btn-outline-light" id="printBtn"></button>
+    </div>
+  </header>
+  <main class="wrap" id="main"><p class="loading">جارٍ تحميل الملف…</p></main>
+  <footer class="site" id="updated"></footer>
+</div>
+
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="معاينة الشاهد">
+  <div class="lb-top">
+    <b id="lbTitle"></b>
+    <span class="lb-count" id="lbCount"></span>
+    <a class="lb-icon" id="lbOpen" target="_blank" rel="noopener" aria-label="فتح في Drive"></a>
+    <button type="button" class="lb-icon" id="lbClose" aria-label="إغلاق"></button>
+  </div>
+  <div class="lb-stage" id="lbStage"></div>
+</div>
+
+<div id="print"></div>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+(function () {
+  var DATA = null;
+  var SEM = 'all';
+  var CACHE = 'portfolio_data_v1';
+  var main = document.getElementById('main');
+
+  document.getElementById('printBtn').innerHTML = ICONS.download + ' تصدير الملف PDF';
+  document.getElementById('lbClose').innerHTML = ICONS.close;
+  document.getElementById('lbOpen').innerHTML = ICONS.download;
+
+  /* ---------- التحميل ---------- */
+  function load() {
+    try {
+      var c = localStorage.getItem(CACHE);
+      if (c) { DATA = JSON.parse(c); render(); }
+    } catch (e) {}
+    apiGet().then(function (d) {
+      DATA = d;
+      try { localStorage.setItem(CACHE, JSON.stringify(d)); } catch (e) {}
+      render();
+    }).catch(function (err) {
+      if (!DATA) main.innerHTML = '<div class="empty-box">تعذّر تحميل الملف. تأكدي من الاتصال ثم حدّثي الصفحة.<br><small>' + esc(err.message) + '</small></div>';
+    });
+  }
+
+  /* ---------- أدوات ---------- */
+  function goals() { return DATA.elements.filter(function (e) { return e.type === 'goal'; }); }
+  function comps() { return DATA.elements.filter(function (e) { return e.type !== 'goal'; }); }
+  function filesOf(el) {
+    if (el.type !== 'goal' || SEM === 'all') return el.files;
+    return el.files.filter(function (f) { return f.sem === SEM; });
+  }
+  function actionsOf(el) {
+    if (el.type !== 'goal' || SEM === 'all') return el.actions;
+    return el.actions.filter(function (a) { return !a.sem || a.sem === SEM; });
+  }
+
+  function segHtml(note) {
+    var opts = [{ id: 'all', label: 'كل الدورة' }].concat(CONFIG.semesters);
+    return '<div class="seg-row"><div class="seg" role="group" aria-label="الفصل الدراسي">' +
+      opts.map(function (o) {
+        return '<button type="button" data-sem="' + o.id + '" aria-pressed="' + (SEM === o.id) + '">' + esc(o.label) + '</button>';
+      }).join('') + '</div>' + (note ? '<span class="seg-note">' + esc(note) + '</span>' : '') + '</div>';
+  }
+
+  function cover() {
+    var p = DATA.profile || {};
+    document.getElementById('name').textContent = p.name || 'ملف الإنجاز الوظيفي';
+    document.getElementById('role').textContent = [p.title, p.school].filter(Boolean).join(' – ');
+    document.getElementById('cycle').textContent = p.year ? 'ملف الإنجاز الوظيفي لدورة التقييم ' + p.year : 'ملف الإنجاز الوظيفي';
+    document.getElementById('avatar').textContent = (p.name || 'م').trim().charAt(0);
+    document.title = p.name ? 'ملف إنجاز ' + p.name : 'ملف الإنجاز الوظيفي';
+    document.getElementById('updated').textContent = DATA.updated ? 'آخر تحديث: ' + dateText(DATA.updated) : '';
+  }
+
+  /* ---------- الرئيسية ---------- */
+  function renderHome() {
+    var allFiles = 0, metGoals = 0, values = 0;
+    DATA.elements.forEach(function (el) {
+      allFiles += filesOf(el).length;
+      actionsOf(el).forEach(function (a) { if (a.valueType) values++; });
+    });
+    goals().forEach(function (g) { var p = progressOf(g.report); if (p && p.achieved >= p.target) metGoals++; });
+
+    var h = '';
+    h += '<section class="stats" aria-label="ملخص">' +
+      stat(allFiles, 'شاهد موثق') +
+      stat(metGoals + ' من ' + goals().length, 'أهداف حققت المستهدف') +
+      stat(values, 'إضافة نوعية') +
+      '</section>';
+    h += segHtml('الفصول تخص الأهداف، والجدارات تشمل الدورة كاملة');
+
+    h += '<section class="section"><div class="section-head"><h2>الأهداف</h2></div><div class="grid">';
+    goals().forEach(function (g) { h += elCard(g); });
+    h += '</div></section>';
+
+    h += '<section class="section"><div class="section-head"><h2>الجدارات</h2></div><div class="grid">';
+    comps().forEach(function (c) { h += elCard(c); });
+    h += '</div></section>';
+
+    main.innerHTML = h;
+  }
+
+  function stat(v, l) { return '<div class="stat"><b>' + esc(v) + '</b><span>' + esc(l) + '</span></div>'; }
+
+  function elCard(el) {
+    var idx = DATA.elements.indexOf(el);
+    var n = filesOf(el).length;
+    var desc = el.report && el.report.text ? el.report.text : (el.type === 'goal' ? 'لم يُكتب نص الهدف بعد' : '');
+    var p = el.type === 'goal' ? progressOf(el.report) : null;
+    var foot = '';
+    if (p) {
+      foot += '<div class="bar-label"><span>المتحقق ' + esc(p.achieved) + ' من ' + esc(p.target) + '</span><span>' + p.pct + '٪</span></div>' +
+        '<div class="bar' + (p.pct > 100 ? ' over' : '') + '"><i style="width:' + Math.min(100, p.pct) + '%"></i></div>';
+    }
+    return '<a class="el-card" href="#e' + idx + '" style="text-decoration:none;color:inherit">' +
+      '<div class="el-top"><span class="el-kind">' + (el.type === 'goal' ? 'هدف' : 'جدارة') + '</span>' +
+      '<span class="badge' + (n ? '' : ' empty') + '">' + (n ? n + ' شاهد' : 'لا توجد شواهد') + '</span></div>' +
+      '<h3>' + esc(el.name) + '</h3>' +
+      (desc ? '<p class="desc">' + esc(desc) + '</p>' : '') +
+      '<div class="el-foot">' + foot + '</div></a>';
+  }
+
+  /* ---------- صفحة العنصر ---------- */
+  var currentGroups = [];
+  var lastIdx = -1;
+
+  function renderElement(idx) {
+    var el = DATA.elements[idx];
+    if (!el) { location.hash = ''; return; }
+    var isGoal = el.type === 'goal';
+    var r = el.report || {};
+    var files = filesOf(el);
+    var acts = actionsOf(el);
+    currentGroups = [];
+
+    var h = '<a class="btn btn-ghost back" href="#">' + ICONS.back + ' كل العناصر</a>';
+
+    // بطاقة التقرير
+    h += '<section class="report"><div class="report-main">' +
+      '<span class="label">' + (isGoal ? esc(el.name) : 'جدارة ' + esc(el.name)) + '</span>' +
+      '<p class="statement">' + esc(r.text || el.name) + '</p></div>';
+    if (isGoal) {
+      var facts = [['الوزن النسبي', r.weight], ['مؤشر القياس', r.kpi], ['المستهدف', fmtVal(r.target, r.unit)], ['المتحقق', fmtVal(r.achieved, r.unit)]]
+        .filter(function (f) { return f[1]; });
+      if (facts.length) {
+        h += '<div class="facts">' + facts.map(function (f) { return '<div class="fact"><span>' + f[0] + '</span><b>' + esc(f[1]) + '</b></div>'; }).join('') + '</div>';
+      }
+      var p = progressOf(r);
+      if (p) {
+        h += '<div class="result"><div class="bar-label"><span>نسبة التحقق</span><span>' + p.pct + '٪</span></div>' +
+          '<div class="bar' + (p.pct > 100 ? ' over' : '') + '"><i style="width:' + Math.min(100, p.pct) + '%"></i></div></div>';
+      }
+    }
+    h += '</section>';
+
+    if (r.impact) h += '<div class="note"><h3>الأثر</h3><p>' + esc(r.impact) + '</p></div>';
+    if (isGoal) h += segHtml('');
+
+    // الإجراءات أو المواقف
+    var used = {};
+    if (acts.length) {
+      h += '<section class="section"><div class="section-head"><h2>' + (isGoal ? 'إجراءات التنفيذ' : 'مواقف تثبت الجدارة') + '</h2></div><div class="actions">';
+      acts.forEach(function (a, i) {
+        var af = files.filter(function (f) { return f.actionId === a.id; });
+        af.forEach(function (f) { used[f.id] = 1; });
+        var meta = [dateText(a.date), isGoal && a.sem ? semLabel(a.sem) : ''].filter(Boolean).join(' – ');
+        h += '<article class="action"><div class="action-head"><span class="action-num">' + (i + 1) + '</span><div>' +
+          '<h3>' + esc(a.text) + '</h3>' + (meta ? '<p class="action-meta">' + esc(meta) + '</p>' : '') + '</div></div>';
+        if (a.valueType) h += '<div class="value"><b>قيمة مضافة: ' + esc(a.valueType) + '</b>' + (a.valueDesc ? '<span>' + esc(a.valueDesc) + '</span>' : '') + '</div>';
+        if (af.length) h += evGrid(groupFiles(af));
+        h += '</article>';
+      });
+      h += '</div></section>';
+    }
+
+    // باقي الشواهد مجمّعة حسب المجلد الفرعي
+    var rest = files.filter(function (f) { return !used[f.id]; });
+    if (rest.length) {
+      h += '<section class="section"><div class="section-head"><h2>' + (acts.length ? 'شواهد أخرى' : 'الشواهد') + '</h2></div>';
+      var subs = [];
+      rest.forEach(function (f) { if (subs.indexOf(f.sub) === -1) subs.push(f.sub); });
+      subs.sort(function (a, b) { return (a ? 1 : 0) - (b ? 1 : 0) || subRank(a) - subRank(b) || a.localeCompare(b, 'ar'); });
+      subs.forEach(function (s) {
+        var sf = rest.filter(function (f) { return f.sub === s; });
+        if (s) h += '<h3 class="sub-title">' + esc(s.split(' / ').join(' ← ')) + '</h3>';
+        h += evGrid(groupFiles(sf));
+      });
+      h += '</section>';
+    }
+
+    if (!acts.length && !rest.length) h += '<div class="empty-box">' + (isGoal && SEM !== 'all' ? 'لا توجد شواهد لهذا الهدف في الفصل المختار' : 'لم تُضف شواهد لهذا العنصر بعد') + '</div>';
+    if (r.challenges) h += '<div class="note sand"><h3>التحديات والمعالجة</h3><p>' + esc(r.challenges) + '</p></div>';
+
+    main.innerHTML = h;
+    if (lastIdx !== idx) window.scrollTo(0, 0);
+    lastIdx = idx;
+  }
+
+  function fmtVal(v, unit) { return v ? (unit ? v + ' ' + unit : String(v)) : ''; }
+
+  function evGrid(groups) {
+    return '<div class="ev-grid">' + groups.map(function (g) {
+      var gi = currentGroups.push(g) - 1;
+      var f = g.files[0];
+      var thumb;
+      if (f.kind === 'img' || f.kind === 'pdf') {
+        thumb = '<div class="ev-thumb' + (f.kind === 'pdf' ? ' pdf' : '') + '"><img loading="lazy" alt="" src="' + thumbUrl(f.id, 500) + '" onerror="this.replaceWith(document.createRange().createContextualFragment(ICONS.' + f.kind + '))">' +
+          (f.kind === 'pdf' ? '<span class="kind">PDF</span>' : '') +
+          (g.files.length > 1 ? '<span class="count">' + g.files.length + ' ملفات</span>' : '') + '</div>';
+      } else {
+        thumb = '<div class="ev-thumb pdf">' + ICONS.pdf + '</div>';
+      }
+      return '<button type="button" class="ev" data-g="' + gi + '">' + thumb +
+        '<span class="ev-body"><b>' + esc(g.title) + '</b><span>' + esc(dateText(g.date)) + '</span></span></button>';
+    }).join('') + '</div>';
+  }
+
+  /* ---------- المعاينة ---------- */
+  var lb = document.getElementById('lb'), stage = document.getElementById('lbStage');
+  var LB = { list: [], i: 0, title: '' };
+
+  function openLb(g) {
+    LB = { list: g.files, i: 0, title: g.title };
+    lb.hidden = false;
+    document.body.style.overflow = 'hidden';
+    showLb();
+    document.getElementById('lbClose').focus();
+  }
+  function showLb() {
+    var f = LB.list[LB.i];
+    document.getElementById('lbTitle').textContent = LB.title;
+    document.getElementById('lbCount').textContent = LB.list.length > 1 ? (LB.i + 1) + ' / ' + LB.list.length : '';
+    document.getElementById('lbOpen').href = viewUrl(f.id);
+    var h = f.kind === 'img'
+      ? '<img alt="' + esc(LB.title) + '" src="' + thumbUrl(f.id, 1800) + '">'
+      : '<iframe title="' + esc(LB.title) + '" src="' + previewUrl(f.id) + '" allow="autoplay"></iframe>';
+    if (LB.list.length > 1) {
+      h += '<button type="button" class="lb-icon lb-nav prev" data-nav="-1" aria-label="السابق">' + ICONS.prev + '</button>' +
+        '<button type="button" class="lb-icon lb-nav next" data-nav="1" aria-label="التالي">' + ICONS.next + '</button>';
+    }
+    stage.innerHTML = h;
+  }
+  function moveLb(d) {
+    if (LB.list.length < 2) return;
+    LB.i = (LB.i + d + LB.list.length) % LB.list.length;
+    showLb();
+  }
+  function closeLb() {
+    lb.hidden = true;
+    stage.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+  document.getElementById('lbClose').addEventListener('click', closeLb);
+  stage.addEventListener('click', function (e) {
+    var n = e.target.closest('[data-nav]');
+    if (n) moveLb(Number(n.dataset.nav));
+    else if (e.target === stage) closeLb();
+  });
+  lb.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeLb();
+    if (e.key === 'ArrowLeft') moveLb(1);
+    if (e.key === 'ArrowRight') moveLb(-1);
+  });
+  var tx = null;
+  stage.addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; }, { passive: true });
+  stage.addEventListener('touchend', function (e) {
+    if (tx == null) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) moveLb(dx > 0 ? 1 : -1); // في الواجهة العربية: السحب لليمين = التالي
+    tx = null;
+  });
+
+  /* ---------- الأحداث العامة ---------- */
+  main.addEventListener('click', function (e) {
+    var s = e.target.closest('[data-sem]');
+    if (s) { SEM = s.dataset.sem; render(); return; }
+    var g = e.target.closest('[data-g]');
+    if (g) openLb(currentGroups[Number(g.dataset.g)]);
+  });
+  window.addEventListener('hashchange', render);
+
+  function render() {
+    if (!DATA) return;
+    cover();
+    var m = location.hash.match(/^#e(\d+)$/);
+    if (m) renderElement(Number(m[1])); else { lastIdx = -1; renderHome(); }
+  }
+
+  /* ---------- التصدير PDF ---------- */
+  document.getElementById('printBtn').addEventListener('click', function () {
+    if (!DATA) return;
+    var btn = this;
+    btn.disabled = true;
+    var p = DATA.profile || {};
+    var h = '<div class="p-cover"><h1>ملف الإنجاز الوظيفي</h1><p><b>' + esc(p.name) + '</b> – ' + esc([p.title, p.school].filter(Boolean).join(' – ')) + '</p>' +
+      (p.year ? '<p>دورة التقييم ' + esc(p.year) + '</p>' : '') + '</div>';
+    DATA.elements.forEach(function (el) {
+      var r = el.report || {};
+      var isGoal = el.type === 'goal';
+      h += '<section class="p-el"><h2>' + esc(el.name) + '</h2>';
+      var rows = [[isGoal ? 'الهدف' : 'تعريف الجدارة', r.text]];
+      if (isGoal) rows = rows.concat([['الوزن النسبي', r.weight], ['مؤشر القياس', r.kpi], ['المستهدف', fmtVal(r.target, r.unit)], ['المتحقق', fmtVal(r.achieved, r.unit)]]);
+      var pr = isGoal ? progressOf(r) : null;
+      if (pr) rows.push(['نسبة التحقق', pr.pct + '٪']);
+      rows.push(['الأثر', r.impact], ['التحديات والمعالجة', r.challenges]);
+      rows = rows.filter(function (x) { return x[1]; });
+      if (rows.length) h += '<table class="p-table">' + rows.map(function (x) { return '<tr><td>' + x[0] + '</td><td>' + esc(x[1]) + '</td></tr>'; }).join('') + '</table>';
+      var used = {};
+      if (el.actions.length) {
+        h += '<h3>' + (isGoal ? 'إجراءات التنفيذ' : 'المواقف') + '</h3>';
+        el.actions.forEach(function (a, i) {
+          var af = el.files.filter(function (f) { return f.actionId === a.id; });
+          af.forEach(function (f) { used[f.id] = 1; });
+          h += '<div class="p-act"><b>' + (i + 1) + '. ' + esc(a.text) + '</b> <small>' + esc([dateText(a.date), isGoal ? semLabel(a.sem) : ''].filter(Boolean).join(' – ')) + '</small>' +
+            (a.valueType ? '<div>قيمة مضافة: ' + esc(a.valueType) + (a.valueDesc ? ' – ' + esc(a.valueDesc) : '') + '</div>' : '') + printEv(af) + '</div>';
+        });
+      }
+      var rest = el.files.filter(function (f) { return !used[f.id]; });
+      if (rest.length) h += '<h3>' + (el.actions.length ? 'شواهد أخرى' : 'الشواهد') + '</h3>' + printEv(rest);
+      h += '</section>';
+    });
+    var pd = document.getElementById('print');
+    pd.innerHTML = h;
+    var imgs = Array.prototype.slice.call(pd.querySelectorAll('img'));
+    var waits = imgs.map(function (im) {
+      return new Promise(function (res) { if (im.complete) res(); im.onload = im.onerror = res; });
+    });
+    Promise.race([Promise.all(waits), new Promise(function (res) { setTimeout(res, 10000); })]).then(function () {
+      btn.disabled = false;
+      window.print();
+    });
+  });
+
+  function printEv(files) {
+    if (!files.length) return '';
+    return '<div class="p-ev">' + groupFiles(files).map(function (g) {
+      var f = g.files[0];
+      var img = (f.kind === 'img' || f.kind === 'pdf') ? '<img alt="" src="' + thumbUrl(f.id, 300) + '">' : '';
+      return '<figure>' + img + '<figcaption>' + esc(g.title) + (g.files.length > 1 ? ' (' + g.files.length + ')' : '') + '</figcaption></figure>';
+    }).join('') + '</div>';
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>إدارة ملف الإنجاز</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header class="cover" style="padding-bottom:70px">
+    <div class="wrap">
+      <div class="who">
+        <p class="cycle">إدارة ملف الإنجاز</p>
+        <h1 id="hello">مرحباً</h1>
+      </div>
+      <div class="btn-row" id="topBtns" hidden>
+        <a class="btn btn-outline-light" href="index.html" target="_blank" rel="noopener">عرض الملف</a>
+        <button type="button" class="btn btn-outline-light" id="logout">خروج</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="main">
+    <!-- الدخول -->
+    <section class="panel" id="login" style="max-width:420px">
+      <div class="field">
+        <label for="pw">كلمة المرور</label>
+        <input class="input" id="pw" type="password" inputmode="numeric" autocomplete="current-password">
+      </div>
+      <label class="check"><input type="checkbox" id="remember"> تذكّرني على هذا الجهاز</label>
+      <button type="button" class="btn btn-primary" id="loginBtn">دخول</button>
+    </section>
+
+    <div id="admin" class="admin-wrap" hidden>
+      <nav class="tabs" role="tablist" aria-label="أقسام الإدارة">
+        <button type="button" role="tab" data-tab="upload" aria-selected="true">رفع شاهد</button>
+        <button type="button" role="tab" data-tab="reports" aria-selected="false">التقارير</button>
+        <button type="button" role="tab" data-tab="files" aria-selected="false">الشواهد</button>
+        <button type="button" role="tab" data-tab="ready" aria-selected="false">الجاهزية</button>
+        <button type="button" role="tab" data-tab="profile" aria-selected="false">بياناتي</button>
+      </nav>
+      <div id="tabBody"></div>
+    </div>
+  </main>
+</div>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+(function () {
+  var PW = '';
+  var DATA = null;
+  var TAB = 'upload';
+  var body = document.getElementById('tabBody');
+  var PW_KEY = 'portfolio_pw';
+
+  /* ---------- رسائل ---------- */
+  function toast(msg, isErr) {
+    var t = document.createElement('div');
+    t.className = 'toast' + (isErr ? ' err' : '');
+    t.setAttribute('role', 'status');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, isErr ? 5000 : 3000);
+  }
+
+  /* ---------- الدخول ---------- */
+  async function login(pw, silent) {
+    var j = await apiPost({ action: 'login', pw: pw });
+    PW = pw;
+    DATA = j.data;
+    document.getElementById('login').hidden = true;
+    document.getElementById('admin').hidden = false;
+    document.getElementById('topBtns').hidden = false;
+    var n = (DATA.profile && DATA.profile.name) || '';
+    document.getElementById('hello').textContent = n ? 'مرحباً ' + n.split(' ')[0] : 'مرحباً';
+    if (!silent) renderTab();
+  }
+
+  async function refresh() {
+    var j = await apiPost({ action: 'login', pw: PW });
+    DATA = j.data;
+    renderTab();
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', async function () {
+    var btn = this, pw = document.getElementById('pw').value.trim();
+    if (!pw) return toast('اكتبي كلمة المرور', true);
+    btn.disabled = true; btn.textContent = 'جارٍ الدخول…';
+    try {
+      await login(pw);
+      if (document.getElementById('remember').checked) localStorage.setItem(PW_KEY, pw);
+      else sessionStorage.setItem(PW_KEY, pw);
+    } catch (err) { toast(err.message, true); }
+    btn.disabled = false; btn.textContent = 'دخول';
+  });
+  document.getElementById('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
+  document.getElementById('logout').addEventListener('click', function () {
+    localStorage.removeItem(PW_KEY); sessionStorage.removeItem(PW_KEY); location.reload();
+  });
+
+  var saved = localStorage.getItem(PW_KEY) || sessionStorage.getItem(PW_KEY);
+  if (saved) {
+    document.getElementById('login').innerHTML = '<p class="loading">جارٍ التحميل…</p>';
+    login(saved).catch(function () { localStorage.removeItem(PW_KEY); sessionStorage.removeItem(PW_KEY); location.reload(); });
+  }
+
+  /* ---------- التبويبات ---------- */
+  document.querySelector('.tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tab]');
+    if (!b) return;
+    TAB = b.dataset.tab;
+    document.querySelectorAll('.tabs [data-tab]').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
+    renderTab();
+  });
+
+  function renderTab() {
+    if (!DATA) return;
+    ({ upload: tabUpload, reports: tabReports, files: tabFiles, ready: tabReady, profile: tabProfile })[TAB]();
+  }
+
+  function elByName(n) { return DATA.elements.find(function (e) { return e.name === n; }); }
+
+  function elOptions(selected) {
+    var g = DATA.elements.filter(function (e) { return e.type === 'goal'; });
+    var c = DATA.elements.filter(function (e) { return e.type !== 'goal'; });
+    function opt(e) { return '<option value="' + esc(e.name) + '"' + (e.name === selected ? ' selected' : '') + '>' + esc(e.name) + '</option>'; }
+    return '<optgroup label="الأهداف">' + g.map(opt).join('') + '</optgroup><optgroup label="الجدارات">' + c.map(opt).join('') + '</optgroup>';
+  }
+
+  function semRadios(name, value) {
+    return '<div class="radios">' + CONFIG.semesters.map(function (s) {
+      return '<label><input type="radio" name="' + name + '" value="' + s.id + '"' + (s.id === value ? ' checked' : '') + '><span>' + esc(s.label) + '</span></label>';
+    }).join('') + '</div>';
+  }
+
+  function actionOptions(el, selected) {
+    return '<option value="">بدون ربط</option>' + (el ? el.actions : []).map(function (a) {
+      var t = a.text.length > 60 ? a.text.slice(0, 60) + '…' : a.text;
+      return '<option value="' + esc(a.id) + '"' + (a.id === selected ? ' selected' : '') + '>' + esc(t) + '</option>';
+    }).join('');
+  }
+
+  /* =========== رفع شاهد =========== */
+  var UP = { element: '', files: [], semManual: false };
+
+  function tabUpload() {
+    if (!UP.element) UP.element = DATA.elements[0] ? DATA.elements[0].name : '';
+    var el = elByName(UP.element);
+    var isGoal = el && el.type === 'goal';
+    var today = isoToday();
+    var subs = (el && el.subs) || [];
+    subs = subs.slice().sort(function (a, b) { return subRank(a) - subRank(b) || a.localeCompare(b, 'ar'); });
+
+    body.innerHTML =
+      '<section class="panel">' +
+      '<div class="row2">' +
+        '<div class="field"><label for="uEl">العنصر</label><select class="input" id="uEl">' + elOptions(UP.element) + '</select></div>' +
+        (subs.length ? '<div class="field"><label for="uSub">المجلد الفرعي</label><select class="input" id="uSub"><option value="">المجلد الرئيسي</option>' +
+          subs.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s.split(' / ').join(' ← ')) + '</option>'; }).join('') + '</select></div>' : '') +
+      '</div>' +
+      '<div class="row2">' +
+        '<div class="field"><label for="uDate">التاريخ</label><input class="input" type="date" id="uDate" value="' + today + '"></div>' +
+        (isGoal ? '<div class="field"><span class="lbl">الفصل الدراسي</span>' + semRadios('uSem', semFromDate(today)) + '<span class="hint">يُحدَّد تلقائياً من التاريخ، ويمكن تغييره</span></div>' : '') +
+      '</div>' +
+      '<div class="field"><label for="uAct">' + (isGoal ? 'الإجراء المرتبط' : 'الموقف المرتبط') + '</label><select class="input" id="uAct">' + actionOptions(el, '') + '</select>' +
+        '<span class="hint">اختياري. تُضاف الإجراءات من تبويب «التقارير»</span></div>' +
+      '<div class="field"><label for="uTitle">عنوان الشاهد</label><input class="input" id="uTitle" placeholder="مثال: سجل الغياب الشهري"></div>' +
+      '<label class="drop" for="uFiles">' + ICONS.img + '<b>اضغطي لاختيار صور أو ملفات PDF</b><span>يمكن اختيار أكثر من ملف دفعة واحدة، والصور تُضغط تلقائياً</span>' +
+        '<input type="file" id="uFiles" multiple accept="image/*,application/pdf"></label>' +
+      '<div class="file-list" id="uList"></div>' +
+      '<label class="check"><input type="checkbox" id="uHidden"> إخفاء من صفحة العرض (مثلاً إن احتوى بيانات طالبات)</label>' +
+      '<button type="button" class="btn btn-primary" id="uGo">رفع الشواهد</button>' +
+      '</section>';
+
+    UP.files = [];
+    UP.semManual = false;
+    drawList();
+
+    document.getElementById('uEl').addEventListener('change', function () { UP.element = this.value; tabUpload(); });
+    document.getElementById('uDate').addEventListener('change', function () {
+      if (UP.semManual) return;
+      var s = semFromDate(this.value);
+      var r = document.querySelector('input[name="uSem"][value="' + s + '"]');
+      if (r) r.checked = true;
+    });
+    body.querySelectorAll('input[name="uSem"]').forEach(function (r) { r.addEventListener('change', function () { UP.semManual = true; }); });
+    document.getElementById('uFiles').addEventListener('change', function () {
+      Array.prototype.forEach.call(this.files, function (f) { UP.files.push({ file: f, status: '' }); });
+      this.value = '';
+      drawList();
+    });
+    document.getElementById('uList').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-rm]');
+      if (b) { UP.files.splice(Number(b.dataset.rm), 1); drawList(); }
+    });
+    document.getElementById('uGo').addEventListener('click', doUpload);
+  }
+
+  function drawList() {
+    var box = document.getElementById('uList');
+    if (!box) return;
+    box.innerHTML = UP.files.map(function (it, i) {
+      var f = it.file;
+      var isImg = f.type.indexOf('image/') === 0;
+      var st = it.status === 'ok' ? '<span class="st ok">تم</span>' : it.status === 'err' ? '<span class="st err">تعذّر</span>' : it.status ? '<span class="st">' + esc(it.status) + '</span>' :
+        '<button type="button" class="lb-icon" style="background:transparent;color:var(--danger)" data-rm="' + i + '" aria-label="إزالة ' + esc(f.name) + '">' + ICONS.close + '</button>';
+      return '<div class="file-row"><span class="mini-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--teal)">' + (isImg ? ICONS.img : ICONS.pdf) + '</span>' +
+        '<span class="nm"><b>' + esc(f.name) + '</b><span>' + sizeText(f.size) + '</span></span>' + st + '</div>';
+    }).join('');
+  }
+
+  function sizeText(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' م.ب' : Math.max(1, Math.round(b / 1024)) + ' ك.ب'; }
+
+  async function compressImage(file) {
+    if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || !window.createImageBitmap) return file;
+    try {
+      var bmp = await createImageBitmap(file);
+      var max = 1800, sc = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      var cv = document.createElement('canvas');
+      cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      var blob = await new Promise(function (r) { cv.toBlob(r, 'image/jpeg', 0.82); });
+      if (!blob || blob.size >= file.size) return file;
+      return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (e) { return file; }
+  }
+
+  function toBase64(file) {
+    return new Promise(function (res, rej) {
+      var r = new FileReader();
+      r.onload = function () { res(String(r.result).split(',')[1]); };
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function doUpload() {
+    var title = document.getElementById('uTitle').value.trim();
+    if (!UP.files.length) return toast('اختاري ملفاً واحداً على الأقل', true);
+    if (!title) return toast('اكتبي عنوان الشاهد', true);
+    var btn = document.getElementById('uGo');
+    btn.disabled = true;
+    var semR = document.querySelector('input[name="uSem"]:checked');
+    var subEl = document.getElementById('uSub');
+    var base = {
+      action: 'upload', pw: PW, element: UP.element,
+      sub: subEl ? subEl.value : '',
+      sem: semR ? semR.value : '',
+      date: document.getElementById('uDate').value || isoToday(),
+      actionId: document.getElementById('uAct').value,
+      title: title,
+      hidden: document.getElementById('uHidden').checked
+    };
+    var done = 0;
+    for (var i = 0; i < UP.files.length; i++) {
+      var it = UP.files[i];
+      if (it.status === 'ok') continue;
+      try {
+        it.status = 'جارٍ التجهيز…'; drawList();
+        var f = await compressImage(it.file);
+        if (f.size > 45 * 1048576) throw new Error('الملف أكبر من 45 م.ب');
+        it.status = 'جارٍ الرفع…'; drawList();
+        var data = await toBase64(f);
+        await apiPost(Object.assign({}, base, { file: { name: f.name, mime: f.type || 'application/octet-stream', data: data } }));
+        it.status = 'ok'; done++;
+      } catch (err) {
+        it.status = 'err';
+        toast(it.file.name + ': ' + err.message, true);
+      }
+      drawList();
+    }
+    btn.disabled = false;
+    if (done) {
+      toast('تم رفع ' + done + (done === 1 ? ' ملف' : ' ملفات'));
+      var failed = UP.files.filter(function (x) { return x.status === 'err'; });
+      await refresh();
+      if (failed.length) { failed.forEach(function (x) { x.status = ''; }); UP.files = failed; drawList(); }
+    }
+  }
+
+  /* =========== التقارير =========== */
+  var REP = { element: '', editing: null };
+
+  function tabReports() {
+    if (!REP.element) REP.element = DATA.elements[0] ? DATA.elements[0].name : '';
+    var el = elByName(REP.element);
+    var isGoal = el.type === 'goal';
+    var r = el.report || {};
+
+    var h = '<section class="panel"><div class="field"><label for="rEl">العنصر</label><select class="input" id="rEl">' + elOptions(REP.element) + '</select></div>';
+    if (isGoal) {
+      h += '<div class="field"><label for="rText">نص الهدف</label><textarea class="input" id="rText" placeholder="انسخيه حرفياً من ميثاق الأداء">' + esc(r.text) + '</textarea></div>' +
+        '<div class="row2">' +
+          inp('rWeight', 'الوزن النسبي', r.weight, 'مثال: 25٪') +
+          inp('rKpi', 'مؤشر القياس', r.kpi, 'مثال: عدد السجلات المنجزة') +
+        '</div><div class="row2">' +
+          inp('rTarget', 'المستهدف (رقم)', r.target, '5') +
+          inp('rAchieved', 'المتحقق (رقم)', r.achieved, '7') +
+          inp('rUnit', 'الوحدة', r.unit, 'سجلات') +
+        '</div>' +
+        '<div class="field"><label for="rImpact">الأثر</label><textarea class="input" id="rImpact" placeholder="جملة أو جملتان عن أثر الإنجاز، برقم إن أمكن">' + esc(r.impact) + '</textarea></div>' +
+        '<div class="field"><label for="rCh">التحديات والمعالجة (اختياري)</label><textarea class="input" id="rCh">' + esc(r.challenges) + '</textarea></div>';
+    } else {
+      h += '<div class="field"><label for="rText">تعريف الجدارة</label><textarea class="input" id="rText" placeholder="سطر واحد">' + esc(r.text) + '</textarea></div>' +
+        '<div class="field"><label for="rImpact">الأثر (اختياري)</label><textarea class="input" id="rImpact">' + esc(r.impact) + '</textarea></div>';
+    }
+    h += '<button type="button" class="btn btn-primary" id="rSave">حفظ التقرير</button></section>';
+
+    // الإجراءات
+    var label = isGoal ? 'إجراءات التنفيذ' : 'المواقف';
+    h += '<section class="panel"><div class="section-head"><h2>' + label + '</h2><button type="button" class="btn btn-ghost btn-sm" id="aNew">إضافة ' + (isGoal ? 'إجراء' : 'موقف') + '</button></div>';
+    h += '<div id="aForm"></div>';
+    if (!el.actions.length) h += '<p class="hint" style="color:var(--muted)">لا توجد ' + label + ' بعد.</p>';
+    el.actions.forEach(function (a, i) {
+      var cnt = el.files.filter(function (f) { return f.actionId === a.id; }).length;
+      h += '<div class="list-item"><div class="top"><b>' + (i + 1) + '. ' + esc(a.text) + '</b><span class="badge' + (cnt ? '' : ' empty') + '">' + (cnt ? cnt + ' شاهد' : 'بدون شواهد') + '</span></div>' +
+        '<span class="action-meta">' + esc([dateText(a.date), isGoal ? semLabel(a.sem) : ''].filter(Boolean).join(' – ')) + '</span>' +
+        (a.valueType ? '<span class="badge gold" style="align-self:flex-start">قيمة مضافة: ' + esc(a.valueType) + '</span>' : '') +
+        '<div class="btn-row"><button type="button" class="btn btn-ghost btn-sm" data-edit="' + esc(a.id) + '">تعديل</button>' +
+        '<button type="button" class="btn btn-danger btn-sm" data-del="' + esc(a.id) + '">حذف</button></div></div>';
+    });
+    h += '</section>';
+    body.innerHTML = h;
+
+    document.getElementById('rEl').addEventListener('change', function () { REP.element = this.value; REP.editing = null; tabReports(); });
+    document.getElementById('rSave').addEventListener('click', async function () {
+      var btn = this; btn.disabled = true;
+      var rep = { text: val('rText'), impact: val('rImpact') };
+      if (isGoal) Object.assign(rep, { weight: val('rWeight'), kpi: val('rKpi'), target: val('rTarget'), achieved: val('rAchieved'), unit: val('rUnit'), challenges: val('rCh') });
+      try { await apiPost({ action: 'saveReport', pw: PW, element: el.name, report: rep }); toast('تم حفظ التقرير'); await refresh(); }
+      catch (err) { toast(err.message, true); btn.disabled = false; }
+    });
+    document.getElementById('aNew').addEventListener('click', function () { actionForm(el, null); });
+    body.querySelectorAll('[data-edit]').forEach(function (b) {
+      b.addEventListener('click', function () { actionForm(el, el.actions.find(function (a) { return a.id === b.dataset.edit; })); });
+    });
+    body.querySelectorAll('[data-del]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!confirm('حذف هذا البند؟ الشواهد المرتبطة به تبقى وتنتقل إلى «شواهد أخرى».')) return;
+        try { await apiPost({ action: 'deleteAction', pw: PW, id: b.dataset.del }); toast('تم الحذف'); await refresh(); }
+        catch (err) { toast(err.message, true); }
+      });
+    });
+  }
+
+  function inp(id, label, v, ph) {
+    return '<div class="field"><label for="' + id + '">' + label + '</label><input class="input" id="' + id + '" value="' + esc(v) + '" placeholder="' + esc(ph || '') + '"></div>';
+  }
+  function val(id) { var x = document.getElementById(id); return x ? x.value.trim() : ''; }
+
+  function actionForm(el, a) {
+    var isGoal = el.type === 'goal';
+    a = a || { id: '', text: '', date: isoToday(), sem: '', valueType: '', valueDesc: '', order: el.actions.length + 1 };
+    var sem = a.sem || semFromDate(a.date);
+    var box = document.getElementById('aForm');
+    box.innerHTML = '<div class="list-item" style="border-color:var(--teal)">' +
+      '<div class="field"><label for="aText">' + (isGoal ? 'الإجراء' : 'الموقف') + '</label><textarea class="input" id="aText" placeholder="' + (isGoal ? 'مثال: أعددتُ سجل الغياب والاستئذان إلكترونياً' : 'الموقف ← ما قمتُ به ← النتيجة') + '">' + esc(a.text) + '</textarea></div>' +
+      '<div class="row2"><div class="field"><label for="aDate">التاريخ</label><input class="input" type="date" id="aDate" value="' + esc(a.date) + '"></div>' +
+      inp('aOrder', 'الترتيب', a.order, '1') + '</div>' +
+      (isGoal ? '<div class="field"><span class="lbl">الفصل الدراسي</span>' + semRadios('aSem', sem) + '</div>' : '') +
+      '<div class="row2"><div class="field"><label for="aVT">نوع القيمة المضافة</label><select class="input" id="aVT"><option value="">لا يوجد</option>' +
+      CONFIG.valueTypes.map(function (t) { return '<option' + (t === a.valueType ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select></div>' +
+      inp('aVD', 'وصف القيمة المضافة', a.valueDesc, 'مثال: قلّل وقت إعداد التقرير من ساعتين إلى ١٠ دقائق') + '</div>' +
+      '<div class="btn-row"><button type="button" class="btn btn-primary btn-sm" id="aSave">حفظ</button><button type="button" class="btn btn-ghost btn-sm" id="aCancel">إلغاء</button></div></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('aDate').addEventListener('change', function () {
+      var r = document.querySelector('input[name="aSem"][value="' + semFromDate(this.value) + '"]');
+      if (r) r.checked = true;
+    });
+    document.getElementById('aCancel').addEventListener('click', function () { box.innerHTML = ''; });
+    document.getElementById('aSave').addEventListener('click', async function () {
+      var text = val('aText');
+      if (!text) return toast('اكتبي نص البند', true);
+      var semR = document.querySelector('input[name="aSem"]:checked');
+      this.disabled = true;
+      try {
+        await apiPost({ action: 'saveAction', pw: PW, item: {
+          id: a.id, element: el.name, text: text, date: val('aDate'), sem: semR ? semR.value : '',
+          valueType: val('aVT'), valueDesc: val('aVD'), order: toNum(val('aOrder')) || 0
+        } });
+        toast('تم الحفظ');
+        await refresh();
+      } catch (err) { toast(err.message, true); this.disabled = false; }
+    });
+  }
+
+  /* =========== الشواهد =========== */
+  var FL = { element: '' };
+
+  function tabFiles() {
+    if (!FL.element) FL.element = DATA.elements[0] ? DATA.elements[0].name : '';
+    var el = elByName(FL.element);
+    var isGoal = el.type === 'goal';
+    var h = '<section class="panel"><div class="field"><label for="fEl">العنصر</label><select class="input" id="fEl">' + elOptions(FL.element) + '</select>' +
+      '<span class="hint">عدّلي العنوان والتاريخ والربط، أو أخفي الشاهد من صفحة العرض</span></div><div id="fBox" style="display:flex;flex-direction:column;gap:10px">';
+    if (!el.files.length) h += '<div class="empty-box">لا توجد شواهد في هذا العنصر.</div>';
+    el.files.forEach(function (f) {
+      var thumb = (f.kind === 'img' || f.kind === 'pdf') ? '<img class="mini-thumb" loading="lazy" alt="" src="' + thumbUrl(f.id, 120) + '">' : '<span class="mini-thumb"></span>';
+      h += '<div class="list-item" data-id="' + esc(f.id) + '"><div class="file-row" style="border:none;padding:0">' + thumb +
+        '<span class="nm"><b>' + esc(f.title) + '</b><span>' + esc([dateText(f.date), isGoal ? semLabel(f.sem) : '', f.sub, f.hidden ? 'مخفي' : ''].filter(Boolean).join(' – ')) + '</span></span></div>' +
+        '<div class="btn-row"><button type="button" class="btn btn-ghost btn-sm" data-fe="' + esc(f.id) + '">تعديل</button>' +
+        '<a class="btn btn-ghost btn-sm" href="' + viewUrl(f.id) + '" target="_blank" rel="noopener">فتح</a>' +
+        '<button type="button" class="btn btn-danger btn-sm" data-fd="' + esc(f.id) + '">حذف</button></div><div class="fe-form"></div></div>';
+    });
+    h += '</div></section>';
+    body.innerHTML = h;
+
+    document.getElementById('fEl').addEventListener('change', function () { FL.element = this.value; tabFiles(); });
+    body.querySelectorAll('[data-fd]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        if (!confirm('حذف الشاهد؟ سيُنقل الملف إلى سلة المهملات في Drive ويمكن استرجاعه خلال ٣٠ يوماً.')) return;
+        try { await apiPost({ action: 'deleteFile', pw: PW, id: b.dataset.fd }); toast('تم الحذف'); await refresh(); }
+        catch (err) { toast(err.message, true); }
+      });
+    });
+    body.querySelectorAll('[data-fe]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = el.files.find(function (x) { return x.id === b.dataset.fe; });
+        var box = b.closest('.list-item').querySelector('.fe-form');
+        var k = 'f' + Math.random().toString(36).slice(2, 7);
+        box.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:12px">' +
+          inp(k + 't', 'العنوان', f.title, '') +
+          '<div class="row2"><div class="field"><label for="' + k + 'd">التاريخ</label><input class="input" type="date" id="' + k + 'd" value="' + esc(f.date) + '"></div>' +
+          '<div class="field"><label for="' + k + 'a">' + (isGoal ? 'الإجراء المرتبط' : 'الموقف المرتبط') + '</label><select class="input" id="' + k + 'a">' + actionOptions(el, f.actionId) + '</select></div></div>' +
+          (isGoal ? '<div class="field"><span class="lbl">الفصل الدراسي</span>' + semRadios(k + 's', f.sem) + '</div>' : '') +
+          '<label class="check"><input type="checkbox" id="' + k + 'h"' + (f.hidden ? ' checked' : '') + '> إخفاء من صفحة العرض</label>' +
+          '<div class="btn-row"><button type="button" class="btn btn-primary btn-sm" id="' + k + 'save">حفظ</button></div></div>';
+        document.getElementById(k + 'save').addEventListener('click', async function () {
+          var semR = document.querySelector('input[name="' + k + 's"]:checked');
+          this.disabled = true;
+          try {
+            await apiPost({ action: 'updateFile', pw: PW, id: f.id, title: val(k + 't'), date: val(k + 'd'),
+              sem: semR ? semR.value : f.sem, actionId: val(k + 'a'), hidden: document.getElementById(k + 'h').checked });
+            toast('تم الحفظ');
+            await refresh();
+          } catch (err) { toast(err.message, true); this.disabled = false; }
+        });
+      });
+    });
+  }
+
+  /* =========== الجاهزية =========== */
+  function tabReady() {
+    var h = '<section class="panel"><p style="color:var(--muted)">هذه الصفحة لكِ فقط ولا تظهر في ملف العرض. تبيّن ما ينقص كل عنصر قبل موعد التقييم، والتقييم النهائي قرار المديرة.</p></section>';
+    DATA.elements.forEach(function (el) {
+      var isGoal = el.type === 'goal';
+      var r = el.report || {};
+      var p = progressOf(r);
+      var withFiles = function (a) { return el.files.some(function (f) { return f.actionId === a.id; }); };
+      var items;
+      if (isGoal) {
+        items = [
+          [!!r.text, 'نص الهدف مكتوب'],
+          [!!p, 'المستهدف والمتحقق مسجلان بالأرقام'],
+          [!!p && p.achieved >= p.target, 'تحقق المستهدف'],
+          [!!p && p.achieved > p.target, 'تجاوز المستهدف'],
+          [el.actions.some(function (a) { return a.valueType && withFiles(a); }), 'قيمة مضافة موثقة بشاهد'],
+          [!!r.impact, 'الأثر مكتوب (ويُفضّل برقم قبل وبعد)'],
+          [el.actions.length > 0 && el.actions.every(withFiles), 'كل إجراء له شاهد']
+        ];
+      } else {
+        items = [
+          [!!r.text, 'تعريف الجدارة مكتوب'],
+          [el.actions.some(withFiles), 'موقف واحد على الأقل موثق بشاهد'],
+          [el.actions.some(function (a) { return a.valueType; }), 'موقف فيه قيمة مضافة'],
+          [el.files.length > 0, 'شواهد مرفوعة']
+        ];
+      }
+      var done = items.filter(function (x) { return x[0]; }).length;
+      h += '<section class="panel ready"><div class="section-head"><h2 style="font-size:18px">' + esc(el.name) + '</h2>' +
+        '<span class="badge' + (done === items.length ? ' ok' : '') + '">' + done + ' من ' + items.length + '</span></div><ul>' +
+        items.map(function (x) {
+          return '<li><span class="dot ' + (x[0] ? 'yes' : 'no') + '" aria-hidden="true">' + (x[0] ? '✓' : '–') + '</span><span>' + x[1] + '<span class="sr">' + (x[0] ? ' (مكتمل)' : ' (ناقص)') + '</span></span></li>';
+        }).join('') + '</ul></section>';
+    });
+    body.innerHTML = h;
+  }
+
+  /* =========== بياناتي =========== */
+  function tabProfile() {
+    var p = DATA.profile || {};
+    body.innerHTML = '<section class="panel">' +
+      inp('pName', 'الاسم كما يظهر في الملف', p.name, '') +
+      '<div class="row2">' + inp('pTitle', 'المسمى الوظيفي', p.title, 'مساعدة إدارية') + inp('pSchool', 'المدرسة', p.school, '') + '</div>' +
+      inp('pYear', 'دورة التقييم', p.year, '2026') +
+      '<button type="button" class="btn btn-primary" id="pSave">حفظ</button></section>';
+    document.getElementById('pSave').addEventListener('click', async function () {
+      this.disabled = true;
+      try {
+        await apiPost({ action: 'saveSettings', pw: PW, settings: {
+          'الاسم': val('pName'), 'المسمى': val('pTitle'), 'المدرسة': val('pSchool'), 'العام الدراسي': val('pYear')
+        } });
+        toast('تم الحفظ');
+        await refresh();
+        document.getElementById('hello').textContent = val('pName') ? 'مرحباً ' + val('pName').split(' ')[0] : 'مرحباً';
+      } catch (err) { toast(err.message, true); this.disabled = false; }
+    });
+  }
+})();
+</script>
+</body>
+</html>
